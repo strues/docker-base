@@ -29,11 +29,16 @@ RUN \
     && ln -sf /bin/true /usr/bin/ischroot \
     && apt-get update \
     # So many things require a correct locale, we might as well install it
-    && apt-get install locales less \
+    && apt-get install -y --no-install-recommends wget ca-certificates locales less \
+    && wget -O /usr/local/bin/dumb-init \
+    https://github.com/Yelp/dumb-init/releases/download/v1.0.0/dumb-init_1.0.0_amd64 \
+    && echo 75802ff9699201550b0f9d6c711a44ebdcf5f849 /usr/local/bin/dumb-init | sha1sum -c - \
+    && chmod +x /usr/local/bin/dumb-init \
     && rm -rf /usr/share/doc/* /usr/share/man/man*/* \
     && if [ -z "$SSH_SERVER_DIR" ]; then rm -f /etc/ssh/ssh_host_*; \
     else cp /etc/ssh/sshd_config /etc/sshd_config.dpkg-dist ; rm -rf /etc/ssh ; ln -s "$SSH_SERVER_DIR" /etc/ssh; fi \
     && apt-get clean -y \
+    && apt-get purge -y wget ca-certificates \
     && apt-get autoclean -y \
     && apt-get autoremove -y \
     && rm -rf /var/cache/debconf/*-old \
@@ -41,7 +46,7 @@ RUN \
 
 
 # Configure executable.
-ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["dumb-init"]
 
 # Define default command.
 CMD []
