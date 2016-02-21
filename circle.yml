@@ -1,0 +1,16 @@
+machine:
+  services:
+    - docker
+
+dependencies:
+  pre:
+    - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+
+  override:
+    - docker pull strues/base:latest || true
+
+test:
+  override:
+    - docker build -t strues/base:latest .
+    - docker push strues/base:latest
+    - docker run -d --name=base strues/base; sleep 10
