@@ -9,7 +9,9 @@ ENV TERM linux
 ENV INITRD no
 
 RUN \
-    echo "en_US ISO-8859-1" >/etc/locale.gen \
+    apt-get update \
+    && DEBIAN_FRONTEND=noninteractive \
+    && echo "en_US ISO-8859-1" >/etc/locale.gen \
     && echo "en_US.UTF-8 UTF-8" >>/etc/locale.gen \
     && [ -z "$TIME_ZONE" ]  ||  echo "$TIME_ZONE" > /etc/timezone  ||  dpkg-reconfigure -f noninteractive tzdata \
     ## Temporarily disable dpkg fsync to make building faster.
