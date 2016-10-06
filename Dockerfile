@@ -1,12 +1,12 @@
 FROM debian:jessie
 MAINTAINER Steven Truesdell <steven@strues.io>
 
-ENV DEBIAN_FRONTEND noninteractive
-ENV APT_SPEEDUP /etc/dpkg/dpkg.cfg.d/docker-apt-speedup
-ENV APT_PROXY_FILE /etc/apt/apt.conf.d/90_apt-cacher_proxy
-ENV TIME_ZONE America/Denver
-ENV TERM linux
-ENV INITRD no
+ENV TERM="linux" \
+    DEBIAN_FRONTEND="noninteractive" \
+    APT_SPEEDUP="/etc/dpkg/dpkg.cfg.d/docker-apt-speedup" \
+    GOSU_VERSION=1.9 \
+    TIME_ZONE="America/Denver"
+
 
 RUN \
     apt-get update \
@@ -16,39 +16,26 @@ RUN \
     && [ -z "$TIME_ZONE" ]  ||  echo "$TIME_ZONE" > /etc/timezone  ||  dpkg-reconfigure -f noninteractive tzdata \
     ## Temporarily disable dpkg fsync to make building faster.
     && [ -z "$APT_SPEEDUP" ]  ||  echo force-unsafe-io > "$APT_SPEEDUP" \
-    ## Proxy when appropriate.
-    && [ -z "$APT_PROXY_FILE" ]  ||  [ -z "$APT_PROXY" ]  ||  echo "Acquire::http::Proxy \"$APT_PROXY\";" > "$APT_PROXY_FILE" \
-    ## Prevent initramfs updates from trying to run grub and lilo.
-    ## https://journal.paul.querna.org/articles/2013/10/15/docker-ubuntu-on-rackspace/
-    ## http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=594189
-    && mkdir -p /etc/container_environment \
-    && echo -n no > /etc/container_environment/INITRD \
-    ## Replace the 'ischroot' tool to make it always return true.
-    ## Prevent initscripts updates from breaking /dev/shm.
-    ## https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=685034
-    ## Yes, the bug is old, but part of the problem is broken callers :(
-    && dpkg-divert --local --rename --add /usr/bin/ischroot \
-    && ln -sf /bin/true /usr/bin/ischroot \
     && apt-get update \
     # So many things require a correct locale, we might as well install it
-    && apt-get install -y --no-install-recommends wget ca-certificates locales less \
-    && wget -O /usr/local/bin/dumb-init \
-    https://github.com/Yelp/dumb-init/releases/download/v1.0.0/dumb-init_1.0.0_amd64 \
-    && echo 75802ff9699201550b0f9d6c711a44ebdcf5f849 /usr/local/bin/dumb-init | sha1sum -c - \
-    && chmod +x /usr/local/bin/dumb-init \
+    && apt-get install -y --no-install-recommends wget ca-certificates locales \
+    && dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')" \
+    && wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch" \
+    && wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc" \
+    && export GNUPGHOME="$(mktemp -d)" \
+    && gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
+    && rm -r "$GNUPGHOME" /usr/local/bin/gosu.asc \
+    && chmod +x /usr/local/bin/gosu \
+    && gosu nobody true \
     && rm -rf /usr/share/doc/* /usr/share/man/man*/* \
-    && if [ -z "$SSH_SERVER_DIR" ]; then rm -f /etc/ssh/ssh_host_*; \
-    else cp /etc/ssh/sshd_config /etc/sshd_config.dpkg-dist ; rm -rf /etc/ssh ; ln -s "$SSH_SERVER_DIR" /etc/ssh; fi \
     && apt-get clean -y \
     && apt-get purge -y wget ca-certificates \
-    && apt-get autoclean -y \
     && apt-get autoremove -y \
     && rm -rf /var/cache/debconf/*-old \
     && rm -rf /var/lib/apt/lists/*
 
 
 # Configure executable.
-ENTRYPOINT ["dumb-init"]
-
-# Define default command.
-CMD []
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
